@@ -110,10 +110,18 @@ namespace Elin_Search_Everything
         {
             //Ignore TraitCheckMerchant
             var matcher = new CodeMatcher(instructions);
-            matcher.MatchForward(false, new CodeMatch(OpCodes.Isinst, typeof(TraitChestMerchant)));
-            matcher.Advance(1);
-            var label = (Label)matcher.Instruction.operand;
-            matcher.SetInstruction(new CodeInstruction(OpCodes.Pop, label));
+            matcher.MatchForward(false, new CodeMatch(OpCodes.Isinst, typeof(TraitChestMerchant)))
+            .ThrowIfInvalid("failed to find/patch WidgetSearch.Search's TraitChestMerchant check");
+            //replace isinst check with pop (isinst usually consumes an object from the stack)
+            var labels = new List<Label>(matcher.Instruction.labels);
+            matcher.SetInstruction(new CodeInstruction(OpCodes.Pop)
+            {
+                labels = labels
+            })
+                .Advance(1);
+            var jumpTarget = (Label)matcher.Instruction.operand;
+            //Replace brfalse.s with br.s
+            matcher.SetInstruction(new CodeInstruction(OpCodes.Br_S, operand: jumpTarget));
             SearchEverything.LogInfo("patched WidgetSearch.Search's TraitChestMerchant check");
 
             return matcher.InstructionEnumeration();
