@@ -27,16 +27,12 @@
     <None Remove="README.md" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="README.md" Pack="true" PackagePath="\"/>
+    <None Include="README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
   <Target Name="CopyAssets" AfterTargets="AfterBuild">
     <ItemGroup>
       <Assets Include="package\**\*.*" />
     </ItemGroup>
-    <Copy
-                SourceFiles="@(Assets)"
-                DestinationFiles="@(Assets->'$(OutDir)%(RecursiveDir)%(Filename)%(Extension)')"
-                SkipUnchangedFiles="true"
-        />
+    <Copy SourceFiles="@(Assets)" DestinationFiles="@(Assets->'$(OutDir)%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
   </Target>
 </Project>

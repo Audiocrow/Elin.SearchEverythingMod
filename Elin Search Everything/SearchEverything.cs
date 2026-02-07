@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using System.Reflection.Emit;
 using System.Runtime.CompilerServices;
@@ -49,30 +50,74 @@ namespace Elin_Search_Everything
         [HarmonyPatch(typeof(WidgetSearch), nameof(WidgetSearch.Search))]
         internal static IEnumerable<CodeInstruction> OnSearch(IEnumerable<CodeInstruction> instructions)
         {
-            //Replace IsPCFaction checks with True
-            bool success = false;
+            //Ignore IsPCFaction
+            int patchedInstances = 0;
             var matcher = new CodeMatcher(instructions);
             while (matcher.MatchForward(false, new CodeMatch(ci => ci.opcode == OpCodes.Callvirt &&
                 ci.operand is MethodInfo mi &&
-                mi.Name == "get_IsPCFaction")).IsValid) {
-                success = true;
-                matcher.RemoveInstruction().Insert(new CodeInstruction(OpCodes.Ldc_I4_1))
+                mi.Name == "get_IsPCFaction")).IsValid)
+            {
+                ++patchedInstances;
+                matcher.SetInstruction(new CodeInstruction(OpCodes.Ldc_I4_1))
                 .Advance(1);
             }
-            if (success) SearchEverything.LogInfo("patched WidgetSearch IsPCFaction");
-            else SearchEverything.LogError("failed to patch WidgetSearch IsPCFaction");
-            //Replace IsPCFactionOrMinion with True
-            success = false;
+            if (patchedInstances > 0) SearchEverything.LogInfo($"patched WidgetSearch IsPCFaction check: {patchedInstances} instances");
+            else SearchEverything.LogError("failed to patch WidgetSearch IsPCFaction check");
+            //Ignore IsPCFactionOrMinion
+            patchedInstances = 0;
             matcher.Start();
-            while(matcher.MatchForward(false, new CodeMatch(ci => ci.opcode == OpCodes.Callvirt &&
+            while (matcher.MatchForward(false, new CodeMatch(ci => ci.opcode == OpCodes.Callvirt &&
                 ci.operand is MethodInfo mi &&
-                mi.Name == "get_IsPCFactionOrMinion")).IsValid) {
-                success = true;
-                matcher.RemoveInstruction().Insert(new CodeInstruction(OpCodes.Ldc_I4_1))
+                mi.Name == "get_IsPCFactionOrMinion")).IsValid)
+            {
+                ++patchedInstances;
+                matcher.SetInstruction(new CodeInstruction(OpCodes.Ldc_I4_1))
                 .Advance(1);
             }
-            if (success) SearchEverything.LogInfo("patched WidgetSearch IsPCFaction");
-            else SearchEverything.LogError("failed to patch WidgetSearch IsPCFaction");
+            if (patchedInstances > 0) SearchEverything.LogInfo($"patched WidgetSearch IsPCFactionOrMinion check: {patchedInstances} instances");
+            else SearchEverything.LogError("failed to patch WidgetSearch IsPCFactionOrMinion check");
+
+            return matcher.InstructionEnumeration();
+        }
+    }
+
+    [HarmonyPatch]
+    internal class Patch_SearchThingDelegate
+    {
+        //Find WidgetSearch's Thing forEach delegate
+        internal static MethodInfo TargetMethod()
+        {
+            try
+            {
+                SearchEverything.LogInfo("AAAAAAAAAAAAAAAAAAAAAAAAAA");
+                var closure = AccessTools.FirstInner(typeof(WidgetSearch), t =>
+                    t.Name.Contains("DisplayClass"))
+                    .GetMethods(AccessTools.all)
+                    .First(m =>
+                         m.ReturnType == typeof(void) &&
+                         m.GetParameters().Any(p => p.ParameterType == typeof(Thing))
+                     );
+                SearchEverything.LogInfo($"Found lambda: {closure.DeclaringType.FullName}.{closure.Name}");
+                return closure;
+            }
+            catch (InvalidOperationException)
+            {
+                SearchEverything.LogError("failed to find WidgetSearch Search's DisplayClass for Thing delegate");
+                return null;
+            }
+        }
+
+        internal static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
+        {
+            //Ignore TraitCheckMerchant
+            var matcher = new CodeMatcher(instructions);
+            if (matcher.MatchForward(false, new CodeMatch(OpCodes.Isinst, typeof(TraitChestMerchant))).IsValid)
+            {
+                matcher.SetInstruction(new CodeInstruction(OpCodes.Ldc_I4_0));
+                SearchEverything.LogInfo("patched WidgetSearch TraitCheckMerchant check");
+            }
+            else SearchEverything.LogError("failed to patch WidgetSearch TraitCheckMerchant check");
+
             return matcher.InstructionEnumeration();
         }
     }
