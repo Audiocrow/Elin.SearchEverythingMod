@@ -18,7 +18,7 @@ namespace Elin_Search_Everything
     }
 
     [BepInPlugin(ModInfo.Guid, ModInfo.Name, ModInfo.Version)]
-    internal class SearchEverything : BaseUnityPlugin
+    public class SearchEverything : BaseUnityPlugin
     {
         internal static SearchEverything? Instance;
 
@@ -26,17 +26,17 @@ namespace Elin_Search_Everything
         {
             Instance = this;
 
-            LogInfo("Attempting to reflect patch classes...");
-            foreach (var type in typeof(SearchEverything).Assembly.GetTypes())
-            {
-                if (type.GetCustomAttributes(typeof(HarmonyPatch), false).Any())
-                {
-                    LogInfo("Found patch class: " + type.FullName);
-                }
-            }
+            //LogInfo("Attempting to reflect patch classes...");
+            //foreach (var type in typeof(SearchEverything).Assembly.GetTypes())
+            //{
+            //    if (type.GetCustomAttributes(typeof(HarmonyPatch), false).Any())
+            //    {
+            //        LogInfo("Found patch class: " + type.FullName);
+            //    }
+            //}
 
-            Harmony.CreateAndPatchAll(typeof(PatchSearch).Assembly, ModInfo.Guid);
-            Harmony.CreateAndPatchAll(typeof(PatchRuntime).Assembly, "audiocrow.fuckit.subpatch2");
+            var harmony = new Harmony(ModInfo.Guid);
+            harmony.PatchAll();
         }
 
         internal static void LogDebug(object message, [CallerMemberName] string caller = "")
@@ -55,38 +55,32 @@ namespace Elin_Search_Everything
         }
     }
 
-    [HarmonyPatch(typeof(WidgetSearch), nameof(WidgetSearch.Search))]
-    internal class PatchSearch
+    [HarmonyPatch]
+    public class PatchSearch
     {
-        [HarmonyTranspiler]
-        internal static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
+        [HarmonyTargetMethod]
+        public static MethodBase FindSearch()
         {
-            //Ignore IsPCFaction
-            int patchedInstances = 0;
+            MethodBase closure = AccessTools.Method(typeof(WidgetSearch), nameof(WidgetSearch.Search));
+            //if (closure != null) SearchEverything.LogInfo($"Found lambda: {closure.DeclaringType.FullName}.{closure.Name}");
+            //else SearchEverything.LogError("failed to find WidgetSearch.Search");
+            return closure;
+        }
+
+        [HarmonyTranspiler]
+        public static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
+        {
+            //Ignore IsPCFaction and IsPCFactionOrMinion
             var matcher = new CodeMatcher(instructions);
             while (matcher.MatchForward(false, new CodeMatch(ci => ci.opcode == OpCodes.Callvirt &&
                 ci.operand is MethodInfo mi &&
-                mi.Name == "get_IsPCFaction")).IsValid)
+                (mi.Name == "get_IsPCFaction" || mi.Name == "get_IsPCFactionOrMinion"))).IsValid)
             {
-                ++patchedInstances;
-                matcher.SetInstruction(new CodeInstruction(OpCodes.Ldc_I4_1))
-                .Advance(1);
+                matcher.SetInstruction(new CodeInstruction(OpCodes.Pop)) //pop this (from callvirt)
+                 .Insert(new CodeInstruction(OpCodes.Ldc_I4_1)) //push true
+                 .Advance(1); //continue
             }
-            if (patchedInstances > 0) SearchEverything.LogInfo($"patched WidgetSearch IsPCFaction check: {patchedInstances} instances");
-            else SearchEverything.LogError("failed to patch WidgetSearch IsPCFaction check");
-            //Ignore IsPCFactionOrMinion
-            patchedInstances = 0;
-            matcher.Start();
-            while (matcher.MatchForward(false, new CodeMatch(ci => ci.opcode == OpCodes.Callvirt &&
-                ci.operand is MethodInfo mi &&
-                mi.Name == "get_IsPCFactionOrMinion")).IsValid)
-            {
-                ++patchedInstances;
-                matcher.SetInstruction(new CodeInstruction(OpCodes.Ldc_I4_1))
-                .Advance(1);
-            }
-            if (patchedInstances > 0) SearchEverything.LogInfo($"patched WidgetSearch IsPCFactionOrMinion check: {patchedInstances} instances");
-            else SearchEverything.LogError("failed to patch WidgetSearch IsPCFactionOrMinion check");
+            SearchEverything.LogInfo("patched WidgetSearch.Search's faction checks");
 
             return matcher.InstructionEnumeration();
         }
@@ -94,30 +88,21 @@ namespace Elin_Search_Everything
 
     [HarmonyWrapSafe]
     [HarmonyPatch]
-    [HarmonyPriority(Priority.High)]
     public class PatchRuntime
     {
         [HarmonyTargetMethod]
-        public static MethodInfo TargetMethod()
+        public static MethodBase FindDisplayClassSearch()
         {
-            try
-            {
-                SearchEverything.LogInfo("AAAAAAAAAAAAAAAAAAAAAAAAAA");
-                var closure = AccessTools.FirstInner(typeof(WidgetSearch), t =>
-                    t.Name.Contains("DisplayClass"))
-                    .GetMethods(AccessTools.all)
-                    .First(m =>
-                            m.ReturnType == typeof(void) &&
-                            m.GetParameters().Any(p => p.ParameterType == typeof(Thing))
-                        );
-                SearchEverything.LogInfo($"Found lambda: {closure.DeclaringType.FullName}.{closure.Name}");
-                return closure;
-            }
-            catch (InvalidOperationException)
-            {
-                SearchEverything.LogError("failed to find WidgetSearch Search's DisplayClass for Thing delegate");
-                return null;
-            }
+            MethodBase closure = AccessTools.FirstInner(typeof(WidgetSearch), t =>
+                t.Name.Contains("DisplayClass"))
+                .GetMethods(AccessTools.all)
+                .First(m =>
+                        m.ReturnType == typeof(void) &&
+                        m.GetParameters().Any(p => p.ParameterType == typeof(Thing))
+                    );
+            //if(closure != null) SearchEverything.LogInfo($"Found lambda: {closure.DeclaringType.FullName}.{closure.Name}");
+            //else SearchEverything.LogError("failed to find WidgetSearch._DisplayClass.Search");
+            return closure;
         }
 
         [HarmonyTranspiler]
@@ -125,12 +110,11 @@ namespace Elin_Search_Everything
         {
             //Ignore TraitCheckMerchant
             var matcher = new CodeMatcher(instructions);
-            if (matcher.MatchForward(false, new CodeMatch(OpCodes.Isinst, typeof(TraitChestMerchant))).IsValid)
-            {
-                matcher.SetInstruction(new CodeInstruction(OpCodes.Ldc_I4_0));
-                SearchEverything.LogInfo("patched WidgetSearch TraitCheckMerchant check");
-            }
-            else SearchEverything.LogError("failed to patch WidgetSearch TraitCheckMerchant check");
+            matcher.MatchForward(false, new CodeMatch(OpCodes.Isinst, typeof(TraitChestMerchant)));
+            matcher.Advance(1);
+            var label = (Label)matcher.Instruction.operand;
+            matcher.SetInstruction(new CodeInstruction(OpCodes.Pop, label));
+            SearchEverything.LogInfo("patched WidgetSearch.Search's TraitChestMerchant check");
 
             return matcher.InstructionEnumeration();
         }
