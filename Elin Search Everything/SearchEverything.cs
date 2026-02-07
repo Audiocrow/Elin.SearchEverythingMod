@@ -6,6 +6,7 @@ using System.Reflection.Emit;
 using System.Runtime.CompilerServices;
 using BepInEx;
 using HarmonyLib;
+using HarmonyLib.Tools;
 
 namespace Elin_Search_Everything
 {
@@ -13,7 +14,7 @@ namespace Elin_Search_Everything
     {
         public const string Guid = "audiocrow.mod.elin.searcheverything";
         public const string Name = "Search Everything";
-        public const string Version = "1.0.0";
+        public const string Version = "0.23.267";
     }
 
     [BepInPlugin(ModInfo.Guid, ModInfo.Name, ModInfo.Version)]
@@ -24,7 +25,18 @@ namespace Elin_Search_Everything
         private void Awake()
         {
             Instance = this;
-            Harmony.CreateAndPatchAll(Assembly.GetExecutingAssembly(), ModInfo.Guid);
+
+            LogInfo("Attempting to reflect patch classes...");
+            foreach (var type in typeof(SearchEverything).Assembly.GetTypes())
+            {
+                if (type.GetCustomAttributes(typeof(HarmonyPatch), false).Any())
+                {
+                    LogInfo("Found patch class: " + type.FullName);
+                }
+            }
+
+            Harmony.CreateAndPatchAll(typeof(PatchSearch).Assembly, ModInfo.Guid);
+            Harmony.CreateAndPatchAll(typeof(PatchRuntime).Assembly, "audiocrow.fuckit.subpatch2");
         }
 
         internal static void LogDebug(object message, [CallerMemberName] string caller = "")
@@ -43,12 +55,11 @@ namespace Elin_Search_Everything
         }
     }
 
-    [HarmonyPatch]
-    internal class Patch_WidgetSearch
+    [HarmonyPatch(typeof(WidgetSearch), nameof(WidgetSearch.Search))]
+    internal class PatchSearch
     {
         [HarmonyTranspiler]
-        [HarmonyPatch(typeof(WidgetSearch), nameof(WidgetSearch.Search))]
-        internal static IEnumerable<CodeInstruction> OnSearch(IEnumerable<CodeInstruction> instructions)
+        internal static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
         {
             //Ignore IsPCFaction
             int patchedInstances = 0;
@@ -81,11 +92,13 @@ namespace Elin_Search_Everything
         }
     }
 
+    [HarmonyWrapSafe]
     [HarmonyPatch]
-    internal class Patch_SearchThingDelegate
+    [HarmonyPriority(Priority.High)]
+    public class PatchRuntime
     {
-        //Find WidgetSearch's Thing forEach delegate
-        internal static MethodInfo TargetMethod()
+        [HarmonyTargetMethod]
+        public static MethodInfo TargetMethod()
         {
             try
             {
@@ -94,9 +107,9 @@ namespace Elin_Search_Everything
                     t.Name.Contains("DisplayClass"))
                     .GetMethods(AccessTools.all)
                     .First(m =>
-                         m.ReturnType == typeof(void) &&
-                         m.GetParameters().Any(p => p.ParameterType == typeof(Thing))
-                     );
+                            m.ReturnType == typeof(void) &&
+                            m.GetParameters().Any(p => p.ParameterType == typeof(Thing))
+                        );
                 SearchEverything.LogInfo($"Found lambda: {closure.DeclaringType.FullName}.{closure.Name}");
                 return closure;
             }
@@ -107,7 +120,8 @@ namespace Elin_Search_Everything
             }
         }
 
-        internal static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
+        [HarmonyTranspiler]
+        public static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
         {
             //Ignore TraitCheckMerchant
             var matcher = new CodeMatcher(instructions);
