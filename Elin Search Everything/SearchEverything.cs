@@ -55,9 +55,29 @@ namespace Elin_Search_Everything
         }
     }
 
+    
+
     [HarmonyPatch]
     public class PatchSearch
     {
+        //internal static HashSet<Card> AddSales()
+        //{
+        //    var map = EMono._map;
+        //    if (map?.props == null)
+        //        return [];
+
+        //    HashSet<Card> stocked = map.props.stocked?.all ?? [];
+        //    SearchEverything.LogInfo($"found {stocked.Count} stocked");
+        //    var sales = map.props.sales;
+        //    // Combine them
+        //    if (sales != null)
+        //    {
+        //        stocked.UnionWith(sales);
+        //        SearchEverything.LogInfo($"concatenated stocked with {sales.Count} sales");
+        //    }
+        //    return stocked;
+        //}
+
         [HarmonyTargetMethod]
         public static MethodBase FindSearch()
         {
@@ -70,17 +90,25 @@ namespace Elin_Search_Everything
         [HarmonyTranspiler]
         public static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
         {
-            //Ignore IsPCFaction and IsPCFactionOrMinion
+            //Ignore IsPCFaction, IsPCFactionOrMinion, and CanSearchContent
             var matcher = new CodeMatcher(instructions);
             while (matcher.MatchForward(false, new CodeMatch(ci => ci.opcode == OpCodes.Callvirt &&
                 ci.operand is MethodInfo mi &&
-                (mi.Name == "get_IsPCFaction" || mi.Name == "get_IsPCFactionOrMinion"))).IsValid)
+                (mi.Name == "get_IsPCFaction" || mi.Name == "get_IsPCFactionOrMinion" ||
+                mi.Name == "get_CanSearchContent"))).IsValid)
             {
                 matcher.SetInstruction(new CodeInstruction(OpCodes.Pop)) //pop this (from callvirt)
                  .Insert(new CodeInstruction(OpCodes.Ldc_I4_1)) //push true
                  .Advance(1); //continue
             }
             SearchEverything.LogInfo("patched WidgetSearch.Search's faction checks");
+
+            //Patch to concatenate props.sales.all onto the foreach loop over props.stocked.all
+            //matcher.Start();
+            //matcher.MatchForward(false, new CodeMatch(OpCodes.Ldfld, AccessTools.Field(typeof(Props), "all")))
+            //.ThrowIfInvalid("failed to find WidgetSearch PropsStocked")
+            //.SetInstruction(new CodeInstruction(OpCodes.Call,
+            //AccessTools.Method(typeof(PatchSearch), nameof(AddSales))));
 
             return matcher.InstructionEnumeration();
         }
@@ -127,4 +155,5 @@ namespace Elin_Search_Everything
             return matcher.InstructionEnumeration();
         }
     }
+
 }
