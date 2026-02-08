@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Meta>
+  <title>Search Everything</title>
+  <id>audiocrow.mod.elin.searcheverything</id>
+  <author>Audiocrow</author>
+  <loadPriority>100</loadPriority>
+  <version>0.23.267</version>
+  <tags>General,QoL,Utility</tags>
+  <description>
+	Makes Property Search (CTRL+F) look at everything on the map and everyone's inventories, disregarding ownership.
+
+	Open source at https://github.com/Audiocrow/Elin.SearchEverythingMod
+  </description>
+  <builtin>false</builtin>
+</Meta>
