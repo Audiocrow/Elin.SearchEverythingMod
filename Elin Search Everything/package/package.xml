@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Meta>
+  <title>Search Everything</title>
+  <id>audiocrow.mod.elin.searcheverything</id>
+  <author>Audiocrow</author>
+  <loadPriority>100</loadPriority>
+  <version>0.23.267</version>
+  <tags>General,QoL,Utility</tags>
+  <description>
+	Lets Property Search (CTRL+F) search everything whether it belongs to your faction or not.
+	Meaning you will see NPC's inventories and all props in the results.
+  </description>
+  <builtin>false</builtin>
+</Meta>

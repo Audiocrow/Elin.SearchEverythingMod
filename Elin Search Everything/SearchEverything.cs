@@ -55,9 +55,8 @@ namespace Elin_Search_Everything
         }
     }
 
-    
-
     [HarmonyPatch]
+    [HarmonyPriority(Priority.High)]
     public class PatchSearch
     {
         //internal static HashSet<Card> AddSales()
@@ -77,6 +76,20 @@ namespace Elin_Search_Everything
         //    }
         //    return stocked;
         //}
+
+        internal static void ProcessThingsRecursive(ThingContainer root, Action<Thing> action, bool onlyAccessible)
+        {
+            SearchEverything.LogInfo($"Sanity check -> root has {root.Count} things");
+            var toProcess = new Queue<Thing>(root);
+            while (toProcess.Count > 0)
+            {
+                Thing t = toProcess.Dequeue();
+                action(t);
+                if (t.things != null && t.trait.IsContainer)
+                    foreach (var inner in t.things)
+                        toProcess.Enqueue(inner);
+            }
+        }
 
         [HarmonyTargetMethod]
         public static MethodBase FindSearch()
@@ -104,11 +117,22 @@ namespace Elin_Search_Everything
             SearchEverything.LogInfo("patched WidgetSearch.Search's faction checks");
 
             //Patch to concatenate props.sales.all onto the foreach loop over props.stocked.all
-            //matcher.Start();
-            //matcher.MatchForward(false, new CodeMatch(OpCodes.Ldfld, AccessTools.Field(typeof(Props), "all")))
+            //matcher.Start()
+            //.MatchForward(false, new CodeMatch(OpCodes.Ldfld, AccessTools.Field(typeof(Props), "all")))
             //.ThrowIfInvalid("failed to find WidgetSearch PropsStocked")
             //.SetInstruction(new CodeInstruction(OpCodes.Call,
             //AccessTools.Method(typeof(PatchSearch), nameof(AddSales))));
+
+            var forEachMethod = AccessTools.Method(typeof(ThingContainer), "Foreach",
+                new Type[] { typeof(Action<Thing>), typeof(bool) }
+            );
+
+            //Patch the foreach loop over chara2.things to recurse all containers within, so we can see everyyything inside.
+
+            matcher.Start()
+            .MatchForward(false, new CodeMatch(OpCodes.Callvirt, forEachMethod))
+            .ThrowIfInvalid("failed to patch foreach on chara2.things")
+            .SetInstruction(new CodeInstruction(OpCodes.Call, AccessTools.Method(typeof(PatchSearch), nameof(ProcessThingsRecursive))));
 
             return matcher.InstructionEnumeration();
         }
@@ -116,6 +140,7 @@ namespace Elin_Search_Everything
 
     [HarmonyWrapSafe]
     [HarmonyPatch]
+    [HarmonyPriority(Priority.Low)]
     public class PatchRuntime
     {
         [HarmonyTargetMethod]
