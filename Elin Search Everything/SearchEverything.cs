@@ -79,7 +79,7 @@ namespace Elin_Search_Everything
 
         internal static void ProcessThingsRecursive(ThingContainer root, Action<Thing> action, bool onlyAccessible)
         {
-            SearchEverything.LogInfo($"Sanity check -> root has {root.Count} things");
+            //SearchEverything.LogInfo($"Sanity check -> root has {root.Count} things");
             var toProcess = new Queue<Thing>(root);
             while (toProcess.Count > 0)
             {
