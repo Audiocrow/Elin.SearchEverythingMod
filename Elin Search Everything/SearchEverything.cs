@@ -55,6 +55,23 @@ namespace Elin_Search_Everything
         }
     }
 
+    [HarmonyWrapSafe]
+    [HarmonyPatch(typeof(WidgetSearch),nameof(WidgetSearch.Search))]
+    public class PatchPrePopulate
+    {
+        //Force shop inventories to populate right away
+        static void Prefix(ref string s)
+        {
+            foreach(Chara chara in EMono._map.charas)
+            {
+                if(chara != EMono.pc && chara.trait.ShopType != 0)
+                {
+                    chara.trait.OnBarter();
+                }
+            }
+        }
+    }
+
     [HarmonyPatch]
     [HarmonyPriority(Priority.High)]
     public class PatchSearch
